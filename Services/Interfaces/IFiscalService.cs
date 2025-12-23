@@ -5,14 +5,12 @@ namespace Datecs.Rest.Services.Interfaces
     public interface IFiscalService
     {
         void Start(int comPort, int baudRate);
-
         bool Ping();
-
         string OpenFiscalReceipt(FiscalOpenRequest req);
         void AddSale(FiscalSaleRequest req);
-        //void Subtotal();
-        //void Total(int paidMode, decimal amount);
-        //void CloseFiscalReceipt();
+        SubtotalResult Subtotal(FiscalSubtotalRequest req);
+        void Total(FiscalTotalRequest req);
+        string CloseFiscalReceipt();
         bool IsConnected { get; }
     }
 

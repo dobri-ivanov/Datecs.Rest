@@ -18,7 +18,6 @@ public class FiscalService : IFiscalService
 {
     private CFD_BGR _fp;
     public bool IsConnected { get; private set; }
-
     private readonly object _sync = new();
 
     public void Start(int comPort, int baudRate)
@@ -59,7 +58,6 @@ public class FiscalService : IFiscalService
             }
         }
     }
-
     private bool CheckConnection()
     {
         try
@@ -79,7 +77,6 @@ public class FiscalService : IFiscalService
             return false;
         }
     }
-
     private void SafeDisconnect()
     {
         try
@@ -94,7 +91,6 @@ public class FiscalService : IFiscalService
             IsConnected = false;
         }
     }
-
     public bool Ping()
     {
         try
@@ -113,8 +109,6 @@ public class FiscalService : IFiscalService
     {
         Console.WriteLine($"[FISCAL] {DateTime.Now:HH:mm:ss} {msg}");
     }
-
-
     public string OpenFiscalReceipt(FiscalOpenRequest req)
     {
         if (_fp == null)
@@ -162,8 +156,6 @@ public class FiscalService : IFiscalService
 
         return slipNumber;
     }
-
-
     public void AddSale(FiscalSaleRequest req)
     {
         if (_fp == null)
@@ -223,4 +215,156 @@ public class FiscalService : IFiscalService
         // SlipNumber е optional, но ако ти трябва:
         _fp.get_OutputParam_ByName(cmd, "SlipNumber", ref slipNumber);
     }
+    public SubtotalResult Subtotal(FiscalSubtotalRequest req)
+    {
+        if (_fp == null)
+            throw new Exception("DEVICE_NOT_STARTED");
+
+        if (!_fp.connected_ToDevice)
+            throw new Exception("DEVICE_NOT_CONNECTED");
+
+        const string cmd = "051_receipt_Subtotal";
+
+        string errorCode = "";
+        string slipNumber = "";
+        string subtotal = "";
+        string taxA = "", taxB = "", taxC = "", taxD = "";
+        string taxE = "", taxF = "", taxG = "", taxH = "";
+
+        int rc;
+
+        rc = _fp.set_InputParam_ByName(cmd, "ToPrint", req.ToPrint ? "1" : "0");
+        if (rc != 0) throw new Exception(_fp.get_ErrorMessageByCode(rc));
+
+        rc = _fp.set_InputParam_ByName(cmd, "ToDisplay", req.ToDisplay ? "1" : "0");
+        if (rc != 0) throw new Exception(_fp.get_ErrorMessageByCode(rc));
+
+        // ⚠️ Discount САМО ако има
+        if (req.DiscountType > 0)
+        {
+            rc = _fp.set_InputParam_ByName(cmd, "Discount_Type", req.DiscountType.ToString());
+            if (rc != 0) throw new Exception(_fp.get_ErrorMessageByCode(rc));
+
+            rc = _fp.set_InputParam_ByName(cmd, "Discount_Value", req.DiscountValue);
+            if (rc != 0) throw new Exception(_fp.get_ErrorMessageByCode(rc));
+        }
+
+        rc = _fp.execute_Command_ByName(cmd);
+        if (rc != 0) throw new Exception(_fp.get_ErrorMessageByCode(rc));
+
+        rc = _fp.get_OutputParam_ByName(cmd, "ErrorCode", ref errorCode);
+        if (rc != 0) throw new Exception(_fp.get_ErrorMessageByCode(rc));
+
+        if (int.Parse(errorCode) != 0)
+            throw new Exception(_fp.get_ErrorMessageByCode(int.Parse(errorCode)));
+
+        _fp.get_OutputParam_ByName(cmd, "SlipNumber", ref slipNumber);
+        _fp.get_OutputParam_ByName(cmd, "Subtotal", ref subtotal);
+        _fp.get_OutputParam_ByName(cmd, "TaxA", ref taxA);
+        _fp.get_OutputParam_ByName(cmd, "TaxB", ref taxB);
+        _fp.get_OutputParam_ByName(cmd, "TaxC", ref taxC);
+        _fp.get_OutputParam_ByName(cmd, "TaxD", ref taxD);
+        _fp.get_OutputParam_ByName(cmd, "TaxE", ref taxE);
+        _fp.get_OutputParam_ByName(cmd, "TaxF", ref taxF);
+        _fp.get_OutputParam_ByName(cmd, "TaxG", ref taxG);
+        _fp.get_OutputParam_ByName(cmd, "TaxH", ref taxH);
+
+        return new SubtotalResult
+        {
+            SlipNumber = slipNumber,
+            Subtotal = subtotal,
+            TaxA = taxA,
+            TaxB = taxB,
+            TaxC = taxC,
+            TaxD = taxD,
+            TaxE = taxE,
+            TaxF = taxF,
+            TaxG = taxG,
+            TaxH = taxH
+        };
+    }
+    public void Total(FiscalTotalRequest req)
+    {
+        if (_fp == null)
+            throw new Exception("DEVICE_NOT_STARTED");
+
+        if (!_fp.connected_ToDevice)
+            throw new Exception("DEVICE_NOT_CONNECTED");
+
+        const string cmd = "053_receipt_Total";
+
+        string errorCode = "";
+        string answer1 = "";
+        string answer2 = "";
+
+        int rc;
+
+        // PaidMode – ЗАДЪЛЖИТЕЛЕН
+        rc = _fp.set_InputParam_ByName(cmd, "PaidMode", req.PaidMode.ToString());
+        if (rc != 0) throw new Exception(_fp.get_ErrorMessageByCode(rc));
+
+        // InputAmount – САМО ако е подаден
+        if (req.InputAmount.HasValue)
+        {
+            rc = _fp.set_InputParam_ByName(
+                cmd,
+                "InputAmount",
+                req.InputAmount.Value.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)
+            );
+            if (rc != 0) throw new Exception(_fp.get_ErrorMessageByCode(rc));
+        }
+
+        // PinPad_PaidMode – САМО ако се ползва пинпад
+        if (!string.IsNullOrEmpty(req.PinPadPaidMode))
+        {
+            rc = _fp.set_InputParam_ByName(cmd, "PinPad_PaidMode", req.PinPadPaidMode);
+            if (rc != 0) throw new Exception(_fp.get_ErrorMessageByCode(rc));
+        }
+
+        rc = _fp.execute_Command_ByName(cmd);
+        if (rc != 0) throw new Exception(_fp.get_ErrorMessageByCode(rc));
+
+        rc = _fp.get_OutputParam_ByName(cmd, "ErrorCode", ref errorCode);
+        if (rc != 0) throw new Exception(_fp.get_ErrorMessageByCode(rc));
+
+        if (int.Parse(errorCode) != 0)
+            throw new Exception(_fp.get_ErrorMessageByCode(int.Parse(errorCode)));
+
+        _fp.get_OutputParam_ByName(cmd, "AnswerField_01", ref answer1);
+        _fp.get_OutputParam_ByName(cmd, "AnswerField_02", ref answer2);
+    }
+    public string CloseFiscalReceipt()
+    {
+        if (_fp == null)
+            throw new Exception("DEVICE_NOT_STARTED");
+
+        if (!_fp.connected_ToDevice)
+            throw new Exception("DEVICE_NOT_CONNECTED");
+
+        const string cmd = "056_receipt_Fiscal_Close";
+
+        string errorCode = "";
+        string slipNumber = "";
+
+        int rc;
+
+        rc = _fp.execute_Command_ByName(cmd);
+        if (rc != 0)
+            throw new Exception(_fp.get_ErrorMessageByCode(rc));
+
+        rc = _fp.get_OutputParam_ByName(cmd, "SlipNumber", ref slipNumber);
+        if (rc != 0)
+            throw new Exception(_fp.get_ErrorMessageByCode(rc));
+
+        rc = _fp.get_OutputParam_ByName(cmd, "ErrorCode", ref errorCode);
+        if (rc != 0)
+            throw new Exception(_fp.get_ErrorMessageByCode(rc));
+
+        if (errorCode != "0")
+            throw new Exception(_fp.get_ErrorMessageByCode(int.Parse(errorCode)));
+
+        return slipNumber;
+    }
+
+
 }

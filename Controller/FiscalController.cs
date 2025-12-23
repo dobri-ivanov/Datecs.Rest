@@ -124,6 +124,70 @@ public class DeviceController : ControllerBase
         }
     }
 
+    [HttpPost("receipt/subtotal")]
+    public IActionResult Subtotal([FromBody] FiscalSubtotalRequest request)
+    {
+        try
+        {
+            var result = _fiscal.Subtotal(request);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(400, new
+            {
+                error = "SUBTOTAL_FAILED",
+                message = ex.Message
+            });
+        }
+    }
+
+
+    [HttpPost("receipt/total")]
+    public IActionResult Total([FromBody] FiscalTotalRequest request)
+    {
+        try
+        {
+            _fiscal.Total(request);
+
+            return Ok(new
+            {
+                status = "OK"
+            });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(400, new
+            {
+                error = "TOTAL_FAILED",
+                message = ex.Message
+            });
+        }
+    }
+    [HttpPost("receipt/close")]
+    public IActionResult CloseFiscalReceipt()
+    {
+        try
+        {
+            var slipNumber = _fiscal.CloseFiscalReceipt();
+
+            return Ok(new
+            {
+                status = "OK",
+                slipNumber
+            });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(400, new
+            {
+                error = "FISCAL_CLOSE_FAILED",
+                message = ex.Message
+            });
+        }
+    }
+
+
 
 
 }
